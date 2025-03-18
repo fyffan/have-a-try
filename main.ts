@@ -29,7 +29,11 @@ class StatsView extends ItemView {
         // 使用基类提供的 containerEl
         const container = this.containerEl.children[1];
         container.empty();
-        container.createEl('h3', { text: '✍️ 实时写作统计' });
+        // container.createEl('h3', { text: '✍️ 实时写作统计' });
+        container.createEl('div', { 
+            text: '实时打字统计',
+            cls: 'modal-title' // Obsidian 标准标题样式类
+        });
         
         // 创建内容容器
         const contentEl = container.createDiv('stats-container');
@@ -46,56 +50,54 @@ class StatsView extends ItemView {
 
 	async onClose() {
         window.clearInterval(this.intervalId);
+        this.containerEl.empty();
     }
 
     private updateView(container: HTMLElement) {
 		// 使用传入的容器元素
-        container.createDiv({ 
-            text: `🕒 总时长：${this.plugin.formatTime(this.plugin.totalDuration)}`,
-            cls: 'stat-item'
-        });
-
-        if (!this.contentEl) return;
+        if (!this.contentEl) return
         
         this.contentEl.empty();
-        this.contentEl.createEl('h3', { text: '状态统计' });
+        this.contentEl.createEl('div', { 
+            text: '✍️ 实时打字统计',
+        });
 
         // 创建统计展示容器
         const statsContainer = this.contentEl.createDiv('stats-container');
         
         // 添加统计数据
         statsContainer.createDiv({ 
-            text: `总时长：${this.plugin.formatTime(this.plugin.totalDuration)}`,
-            cls: 'stat-item'
+            text: `🕒 打字时长：${this.plugin.formatTime(this.plugin.totalDuration)}`,
+            // cls: 'stat-item'
         });
         
         statsContainer.createDiv({ 
-            text: `空闲时间：${this.plugin.formatTime(this.plugin.totalIdleTime)}`,
-            cls: 'stat-item'
+            text: `🐟 空闲时间：${this.plugin.formatTime(this.plugin.totalIdleTime)}`,
+            // cls: 'stat-item'
         });
         
         statsContainer.createDiv({ 
-            text: `有效时间：${this.plugin.formatTime(this.plugin.effectiveTypingTime)}`,
-            cls: 'stat-item'
+            text: `✏️ 有效时间：${this.plugin.formatTime(this.plugin.effectiveTypingTime)}`,
+            // cls: 'stat-item'
         });
         
         statsContainer.createDiv({ 
-            text: `本次字数：${this.plugin.currentSessionWordCount}`,
-            cls: 'stat-item'
+            text: `📝 本次字数：${this.plugin.currentSessionWordCount}`,
+            // cls: 'stat-item'
         });
 
         const instantSpeed = this.plugin.calculateInstantSpeed();
         statsContainer.createDiv({ 
-            text: `当前速度：${instantSpeed.toFixed(1)} 字/小时`,
-            cls: 'stat-item'
+            text: `🚀 当前时速：${instantSpeed.toFixed(1)} 字/小时`,
+            // cls: 'stat-item'
         });
 
         const averageSpeed = this.plugin.effectiveTypingTime > 0 
             ? (this.plugin.currentSessionWordCount / (this.plugin.effectiveTypingTime / 3600))
             : 0;
         statsContainer.createDiv({ 
-            text: `平均速度：${averageSpeed.toFixed(1)} 字/小时`,
-            cls: 'stat-item'
+            text: `📈 平均速度：${averageSpeed.toFixed(1)} 字/小时`,
+            // cls: 'stat-item'
         });
     }
 }
@@ -112,176 +114,7 @@ const DEFAULT_SETTINGS: TypingStatsSettings = {
     updateInterval: 1000, // 每秒刷新
     idleThreshold: 10, // 超过 10 秒算作短暂休息（不影响有效时长）
     stopThreshold: 120 // 2 分钟（120 秒）不打字则暂停计时
-};
-
-// export default class TypingStatsPlugin extends Plugin {
-//     settings: TypingStatsSettings;
-//     statusBarItemEl: HTMLElement;
-
-//     typingStartTime: number | null = null; // 记录打字开始时间
-//     lastTypedTime: number = 0; // 记录最后打字时间
-//     totalDuration: number = 0; // 总时长（秒）
-//     effectiveTypingTime: number = 0; // 有效写作时间（秒）
-//     totalIdleTime: number = 0; // 摸鱼时长（秒）
-//     lastWordCount: number = 0; // 当前文档总字数
-//     isIdle: boolean = false; // 是否进入摸鱼状态
-//     isPaused: boolean = false; // 是否暂停计时
-
-//     wordHistory: { timestamp: number, charCount: number }[] = []; // 记录最近的字数变化
-
-//     async onload() {
-//         await this.loadSettings();
-
-//         this.statusBarItemEl = this.addStatusBarItem();
-//         this.statusBarItemEl.setText('Typing Stats: 等待打字...');
-
-//         this.registerEvent(
-//             this.app.workspace.on('editor-change', (editor: Editor) => {
-//                 this.handleTyping(editor);
-//             })
-//         );
-
-//         this.registerEvent(
-//             this.app.workspace.on('quit', () => {
-//                 this.endTypingSession();
-//             })
-//         );
-
-//         this.registerInterval(window.setInterval(() => {
-//             this.updateStats();
-//         }, this.settings.updateInterval));
-
-//         this.addSettingTab(new TypingStatsSettingTab(this.app, this));
-//     }
-
-//     onunload() {
-//         this.endTypingSession();
-//     }
-
-//     async loadSettings() {
-//         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-//     }
-
-//     async saveSettings() {
-//         await this.saveData(this.settings);
-//     }
-
-//     handleTyping(editor: Editor) {
-//         const currentTime = Date.now();
-//         const content = editor.getValue();
-//         const charCount = content.replace(/\s/g, "").length; // 计算去空格字数
-
-//         if (charCount === 0) return;
-
-//         // 继续打字时恢复计时
-//         if (this.isPaused) {
-//             this.isPaused = false;
-//             this.typingStartTime = currentTime - this.totalDuration * 1000; // 恢复原时间基准
-//             this.statusBarItemEl.setText("计时恢复，继续写作...");
-//         }
-
-//         if (this.typingStartTime === null) {
-//             this.typingStartTime = currentTime;
-//             this.totalDuration = 0;
-//             this.effectiveTypingTime = 0;
-//             this.totalIdleTime = 0;
-//         }
-
-//         // 计算摸鱼时间
-//         if (this.lastTypedTime > 0) {
-//             const idleTime = (currentTime - this.lastTypedTime) / 1000;
-//             if (idleTime > this.settings.idleThreshold) {
-//                 this.isIdle = true;
-//             }
-//         }
-
-//         if (this.isIdle) {
-//             this.isIdle = false; // 退出摸鱼状态
-//         }
-
-//         this.lastTypedTime = currentTime;
-//         this.lastWordCount = charCount;
-
-//         // 记录最近 5 秒的字数
-//         this.wordHistory.push({ timestamp: currentTime, charCount });
-//         this.cleanWordHistory();
-//     }
-
-//     updateStats() {
-//         if (this.typingStartTime === null || this.isPaused) return;
-
-//         const currentTime = Date.now();
-//         const elapsedTime = (currentTime - this.typingStartTime) / 1000; // 总时长
-//         const lastIdleTime = (currentTime - this.lastTypedTime) / 1000; // 计算当前空闲时长
-
-//         // **处理摸鱼逻辑**
-//         if (lastIdleTime > this.settings.idleThreshold) {
-//             if (!this.isIdle) {
-//                 this.isIdle = true;
-//                 this.statusBarItemEl.setText("进入摸鱼状态...");
-//             }
-//             this.totalIdleTime += this.settings.updateInterval / 1000; // 继续累计摸鱼时长
-//         } else if (this.isIdle) {
-//             this.isIdle = false;
-//         }
-
-//         // 超过写作结束阈值，暂停计时
-//         if (lastIdleTime > this.settings.stopThreshold) {
-//             this.isPaused = true;
-//             this.statusBarItemEl.setText("计时已暂停（超时未打字），继续打字将恢复...");
-//             return;
-//         }
-
-//         this.totalDuration = elapsedTime;
-//         this.effectiveTypingTime = Math.max(this.totalDuration - this.totalIdleTime, 0);
-
-//         // 计算瞬时码字速度和平均码字速度（字/小时）
-//         const instantSpeed = this.calculateInstantSpeed();
-//         const averageSpeed = this.effectiveTypingTime > 0 ? (this.lastWordCount / (this.effectiveTypingTime / 3600)) : 0;
-
-//         this.statusBarItemEl.setText(
-//             `总时长: ${this.formatTime(this.totalDuration)} | 摸鱼: ${this.formatTime(this.totalIdleTime)} | 写作: ${this.formatTime(this.effectiveTypingTime)} | 字数: ${this.lastWordCount} | 瞬时: ${instantSpeed.toFixed(1)}字/小时 | 平均: ${averageSpeed.toFixed(1)}字/小时`
-//         );
-//     }
-
-//     endTypingSession() {
-//         if (this.typingStartTime === null) return;
-
-//         this.totalDuration = (Date.now() - this.typingStartTime) / 1000;
-//         this.typingStartTime = null;
-//         this.lastTypedTime = 0;
-
-//         const effectiveTypingTime = Math.max(this.totalDuration - this.totalIdleTime, 0);
-//         const instantSpeed = this.calculateInstantSpeed();
-//         const averageSpeed = effectiveTypingTime > 0 ? (this.lastWordCount / (effectiveTypingTime / 60)) : 0;
-
-//         this.statusBarItemEl.setText(
-//             `最终: 总时长: ${this.formatTime(this.totalDuration)} | 摸鱼: ${this.formatTime(this.totalIdleTime)} | 写作: ${this.formatTime(effectiveTypingTime)} | 字数: ${this.lastWordCount} | 瞬时: ${instantSpeed.toFixed(1)}字/分 | 平均: ${averageSpeed.toFixed(1)}字/分`
-//         );
-//     }
-
-//     formatTime(seconds: number): string {
-//         const minutes = Math.floor(seconds / 60);
-//         const secs = Math.floor(seconds % 60);
-//         return `${minutes}分${secs}秒`;
-//     }
-
-//     cleanWordHistory() {
-//         const now = Date.now();
-//         this.wordHistory = this.wordHistory.filter(entry => now - entry.timestamp <= 5000);
-//     }
-
-//     calculateInstantSpeed(): number {
-//         if (this.wordHistory.length < 2) return 0;
-
-//         const first = this.wordHistory[0];
-//         const last = this.wordHistory[this.wordHistory.length - 1];
-//         const deltaTime = (last.timestamp - first.timestamp) / 1000; // 秒
-//         const deltaWords = last.charCount - first.charCount;
-
-//         return deltaTime > 0 ? (deltaWords / (deltaTime / 3600)) : 0; // 转换成字/小时
-//     }
-// }
+}
 
 export default class TypingStatsPlugin extends Plugin {
     settings: TypingStatsSettings;
@@ -362,8 +195,13 @@ export default class TypingStatsPlugin extends Plugin {
         }
     }
 
-    onunload() {
+    async onunload() {
         this.endTypingSession();
+        // 手动清理视图
+        this.app.workspace.detachLeavesOfType(VIEW_TYPE_STATS);
+ 
+        // 调用父类清理方法（自动清理通过 register* 方法注册的资源）
+        super.onunload();
     }
 
 	resetTypingStats() {
@@ -437,8 +275,20 @@ export default class TypingStatsPlugin extends Plugin {
 
         this.lastTypedTime = currentTime;
 
-        // 记录最近 5 秒的字数
-        this.wordHistory.push({ timestamp: currentTime, charCount });
+        // // 记录最近 5 秒的字数
+        // this.wordHistory.push({ timestamp: currentTime, charCount });
+        // this.cleanWordHistory();
+
+        // 优化后的数据记录策略
+        if (this.wordHistory.length === 0 || 
+            currentTime - this.wordHistory[this.wordHistory.length-1].timestamp > 1000 // 至少1秒间隔
+        ) {
+            this.wordHistory.push({ 
+                timestamp: currentTime, 
+                charCount: this.currentSessionWordCount 
+            });
+        }
+        
         this.cleanWordHistory();
     }
 
@@ -510,20 +360,75 @@ export default class TypingStatsPlugin extends Plugin {
 		return `${hh}:${mm}:${ss}`;
 	}
 
+    // cleanWordHistory() {
+    //     const now = Date.now();
+    //     this.wordHistory = this.wordHistory.filter(entry => now - entry.timestamp <= 3000);
+    // }
+
+    // calculateInstantSpeed(): number {
+    //     if (this.wordHistory.length < 2) return 0;
+
+    //     const first = this.wordHistory[0];
+    //     const last = this.wordHistory[this.wordHistory.length - 1];
+    //     const deltaTime = (last.timestamp - first.timestamp) / 1000;
+    //     const deltaWords = last.charCount - first.charCount;
+
+    //     return deltaTime > 0 ? (deltaWords / (deltaTime / 3600)) : 0;
+    // }
+
     cleanWordHistory() {
+        // 保留最近30秒数据（为计算留出缓冲）
         const now = Date.now();
-        this.wordHistory = this.wordHistory.filter(entry => now - entry.timestamp <= 5000);
+        this.wordHistory = this.wordHistory.filter(entry => 
+            now - entry.timestamp <= 30000
+        );
     }
 
     calculateInstantSpeed(): number {
-        if (this.wordHistory.length < 2) return 0;
-
-        const first = this.wordHistory[0];
-        const last = this.wordHistory[this.wordHistory.length - 1];
-        const deltaTime = (last.timestamp - first.timestamp) / 1000;
-        const deltaWords = last.charCount - first.charCount;
-
-        return deltaTime > 0 ? (deltaWords / (deltaTime / 3600)) : 0;
+        const now = Date.now();
+        // 过滤有效数据窗口（最近10秒）
+        const validEntries = this.wordHistory.filter(entry => 
+            now - entry.timestamp <= 10000 && 
+            entry.timestamp >= (this.typingStartTime || now)
+        );
+ 
+        if (validEntries.length < 2) return 0;
+ 
+        // 时间衰减加权计算
+        let totalWeight = 0;
+        let totalSpeed = 0;
+        
+        // 从旧到新遍历（index 0 -> length-1）
+        for (let i = 1; i < validEntries.length; i++) {
+            const prev = validEntries[i - 1];
+            const curr = validEntries[i];
+            
+            // 计算时间差（秒）
+            const deltaTime = (curr.timestamp - prev.timestamp) / 1000;
+            if (deltaTime <= 0) continue;
+            
+            // 计算字数变化
+            const deltaWords = curr.charCount - prev.charCount;
+            
+            // 时间衰减因子（越新的数据权重越高）
+            const timeFactor = 1 - (now - curr.timestamp) / 10000; // 0（10秒前） ~ 1（当前）
+            const weight = deltaTime * (0.5 + 0.5 * timeFactor); // 基础权重 + 时间加权
+            
+            // 瞬时速度（字/小时）
+            const speed = (deltaWords / deltaTime) * 3600;
+            
+            totalSpeed += speed * weight;
+            totalWeight += weight;
+        }
+ 
+        // 处理摸鱼状态的平滑过渡
+        if (this.isIdle) {
+            const idleSeconds = (now - this.lastTypedTime) / 1000;
+            const decayFactor = Math.max(0, 1 - idleSeconds / 5); // 5秒线性衰减
+            return decayFactor * (totalWeight > 0 ? totalSpeed / totalWeight : 0);
+        }
+ 
+        return totalWeight > 0 ? totalSpeed / totalWeight : 0;
     }
 }
 
@@ -582,6 +487,11 @@ class TypingStatsSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					}
 				}));
+    }
+
+    hide(): void {
+        // 自动清理设置界面元素
+        this.containerEl.empty();
     }
 }
 
