@@ -29,18 +29,38 @@ class StatsView extends ItemView {
         // 使用基类提供的 containerEl
         const container = this.containerEl.children[1];
         container.empty();
-        // container.createEl('h3', { text: '✍️ 实时写作统计' });
-        container.createEl('div', { 
-            text: '实时打字统计',
-            cls: 'modal-title' // Obsidian 标准标题样式类
-        });
-        
+  
         // 创建内容容器
         const contentEl = container.createDiv('stats-container');
         
         // 初始化渲染
         this.updateView(contentEl);
-        
+
+        const stopButton = container.createDiv('stats-stop-button');
+        stopButton.createEl('button', {
+            text: '⏹ 终止',
+            cls: 'typing-stop-button',
+        }).addEventListener('click', async () => {
+            await this.plugin.handleStop();
+        });
+
+        const copyButton = container.createDiv('stats-copy-button');
+        copyButton.createEl('button', {
+            text: '⏹ 复制',
+            cls: 'typing-copy-button',
+        }).addEventListener('click', async () => {
+            // await this.plugin.handleStop();
+            // await this.plugin.insertStatsToDocument();
+            await this.plugin.copyStatsToClipboard();
+        });
+
+        // 添加重新开始按钮
+        const restartButton = container.createDiv('stats-restart-button');
+        restartButton.createEl('button', {
+            text: '🔄 重置',
+            cls: 'typing-restart-button',
+        }).addEventListener('click', () => this.plugin.handleRestart());
+
         // 设置定时更新
         this.intervalId = window.setInterval(() => {
             contentEl.empty(); // 清空后重新渲染
@@ -55,15 +75,15 @@ class StatsView extends ItemView {
 
     private updateView(container: HTMLElement) {
 		// 使用传入的容器元素
-        if (!this.contentEl) return
+        if (!container) return
         
-        this.contentEl.empty();
-        this.contentEl.createEl('div', { 
+        container.empty();
+        container.createEl('div', { 
             text: '✍️ 实时打字统计',
         });
 
         // 创建统计展示容器
-        const statsContainer = this.contentEl.createDiv('stats-container');
+        const statsContainer = container.createDiv('stats-container');
         
         // 添加统计数据
         statsContainer.createDiv({ 
@@ -99,10 +119,12 @@ class StatsView extends ItemView {
             text: `📈 平均速度：${averageSpeed.toFixed(1)} 字/小时`,
             // cls: 'stat-item'
         });
+
     }
+
+
+    
 }
-
-
 
 interface TypingStatsSettings {
     updateInterval: number; // 刷新间隔（毫秒）
@@ -120,6 +142,7 @@ export default class TypingStatsPlugin extends Plugin {
     settings: TypingStatsSettings;
     statusBarItemEl: HTMLElement;
     stopButtonEl: HTMLElement | null = null;
+    showViews: StatsView;
 
     typingStartTime: number | null = null;
     lastTypedTime: number = 0;
@@ -169,40 +192,25 @@ export default class TypingStatsPlugin extends Plugin {
             this.activateView();
         });
 
-        // 添加停止按钮到状态栏
-        this.addStopButton();
-
         this.registerInterval(window.setInterval(() => {
             this.updateStats();
         }, this.settings.updateInterval));
 
         this.addSettingTab(new TypingStatsSettingTab(this.app, this));
-        // 状态栏点击事件
-        this.statusBarItemEl.onClickEvent(() => {
-            if (this.isStopped) {
-                this.handleRestart();
-            }
-        });
+  
     }
 
-    // 添加停止按钮
-    private addStopButton() {
-        this.stopButtonEl = this.addStatusBarItem();
-        this.stopButtonEl.createEl('button', {
-            text: '⏹ 停止统计',
-            cls: 'typing-stop-button',
-        }).addEventListener('click', () => this.handleStop());
+    async copyStatsToClipboard() {
+        const statsText = this.generateStatsContent();
+        await navigator.clipboard.writeText(statsText);
     }
 
     // 处理停止操作
-    private async handleStop() {
+    async handleStop() {
         // 停止统计逻辑
         this.isPaused = true;
         this.typingStartTime = null;
- 
-        // 插入统计结果
-        await this.insertStatsToDocument();
- 
+
         // 更新按钮状态
         if (this.stopButtonEl) {
             this.stopButtonEl.empty();
@@ -211,13 +219,13 @@ export default class TypingStatsPlugin extends Plugin {
                 cls: 'typing-stopped-text',
             });
         }
- 
-        // 可选：显示完成通知
-        new Notice('统计结果已插入文档末尾', 5000);
+
+        new Notice('已停止统计', 5000);
+
         this.isStopped = true;
     }
 
-    private handleRestart() {
+    async handleRestart() {
         // 重置所有统计
         this.resetTypingStats();
         
@@ -225,26 +233,13 @@ export default class TypingStatsPlugin extends Plugin {
         this.initialWordCount = null;
         this.isStopped = false;
         this.isPaused = false;
-        
-        // 恢复UI状态
-        this.statusBarItemEl.setText('Typing Stats: 统计重新开始...');
-        if (this.stopButtonEl) {
-            this.stopButtonEl.empty();
-            this.stopButtonEl.createEl('button', {
-                text: '⏹ 停止统计',
-                cls: 'typing-stop-button',
-            }).addEventListener('click', () => this.handleStop());
-        }
-
-        // 启动新计时
-        this.typingStartTime = Date.now();
-        this.lastTypedTime = Date.now();
+        new Notice('已重置统计数据', 5000);
     }
 
-
     // 插入统计信息到文档
-    private async insertStatsToDocument() {
+    async insertStatsToDocument() {
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        new Notice('没有活动页面', 5000);
         if (!activeView?.editor) return;
  
         const statsContent = this.generateStatsContent();
@@ -254,10 +249,13 @@ export default class TypingStatsPlugin extends Plugin {
             `\n${statsContent}\n`,
             { line: docEnd, ch: 0 }
         );
+
+        // 可选：显示完成通知
+        new Notice('统计结果已插入文档末尾', 5000);
     }
 
     // 生成统计内容
-    private generateStatsContent(): string {
+    generateStatsContent(): string {
         return [
             '## ✍️ 写作统计',
             `- 总时长: ${this.formatTime(this.totalDuration)}`,
@@ -375,10 +373,6 @@ export default class TypingStatsPlugin extends Plugin {
 
         this.lastTypedTime = currentTime;
 
-        // // 记录最近 5 秒的字数
-        // this.wordHistory.push({ timestamp: currentTime, charCount });
-        // this.cleanWordHistory();
-
         // 优化后的数据记录策略
         if (this.wordHistory.length === 0 || 
             currentTime - this.wordHistory[this.wordHistory.length-1].timestamp > 1000 // 至少1秒间隔
@@ -460,22 +454,6 @@ export default class TypingStatsPlugin extends Plugin {
 		return `${hh}:${mm}:${ss}`;
 	}
 
-    // cleanWordHistory() {
-    //     const now = Date.now();
-    //     this.wordHistory = this.wordHistory.filter(entry => now - entry.timestamp <= 3000);
-    // }
-
-    // calculateInstantSpeed(): number {
-    //     if (this.wordHistory.length < 2) return 0;
-
-    //     const first = this.wordHistory[0];
-    //     const last = this.wordHistory[this.wordHistory.length - 1];
-    //     const deltaTime = (last.timestamp - first.timestamp) / 1000;
-    //     const deltaWords = last.charCount - first.charCount;
-
-    //     return deltaTime > 0 ? (deltaWords / (deltaTime / 3600)) : 0;
-    // }
-
     cleanWordHistory() {
         // 保留最近30秒数据（为计算留出缓冲）
         const now = Date.now();
@@ -531,8 +509,6 @@ export default class TypingStatsPlugin extends Plugin {
         return totalWeight > 0 ? totalSpeed / totalWeight : 0;
     }
 }
-
-
 
 class TypingStatsSettingTab extends PluginSettingTab {
     plugin: TypingStatsPlugin;
