@@ -1,4 +1,4 @@
-import { App, Editor, TFile, MarkdownView, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, TFile, Notice, MarkdownView, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import { ItemView, WorkspaceLeaf } from 'obsidian';
 
 const VIEW_TYPE_STATS = 'typing-stats-view';
@@ -119,6 +119,7 @@ const DEFAULT_SETTINGS: TypingStatsSettings = {
 export default class TypingStatsPlugin extends Plugin {
     settings: TypingStatsSettings;
     statusBarItemEl: HTMLElement;
+    stopButtonEl: HTMLElement | null = null;
 
     typingStartTime: number | null = null;
     lastTypedTime: number = 0;
@@ -127,6 +128,7 @@ export default class TypingStatsPlugin extends Plugin {
     totalIdleTime: number = 0;
     isIdle: boolean = false;
     isPaused: boolean = false;
+    isStopped: boolean = false;
 
     initialWordCount: number | null = null; // 记录本次写作周期起始字数
     currentSessionWordCount: number = 0; // 本次写作周期的字数
@@ -167,12 +169,107 @@ export default class TypingStatsPlugin extends Plugin {
             this.activateView();
         });
 
+        // 添加停止按钮到状态栏
+        this.addStopButton();
+
         this.registerInterval(window.setInterval(() => {
             this.updateStats();
         }, this.settings.updateInterval));
 
         this.addSettingTab(new TypingStatsSettingTab(this.app, this));
+        // 状态栏点击事件
+        this.statusBarItemEl.onClickEvent(() => {
+            if (this.isStopped) {
+                this.handleRestart();
+            }
+        });
     }
+
+    // 添加停止按钮
+    private addStopButton() {
+        this.stopButtonEl = this.addStatusBarItem();
+        this.stopButtonEl.createEl('button', {
+            text: '⏹ 停止统计',
+            cls: 'typing-stop-button',
+        }).addEventListener('click', () => this.handleStop());
+    }
+
+    // 处理停止操作
+    private async handleStop() {
+        // 停止统计逻辑
+        this.isPaused = true;
+        this.typingStartTime = null;
+ 
+        // 插入统计结果
+        await this.insertStatsToDocument();
+ 
+        // 更新按钮状态
+        if (this.stopButtonEl) {
+            this.stopButtonEl.empty();
+            this.stopButtonEl.createEl('span', {
+                text: '已停止 | 单击状态栏图标重启',
+                cls: 'typing-stopped-text',
+            });
+        }
+ 
+        // 可选：显示完成通知
+        new Notice('统计结果已插入文档末尾', 5000);
+        this.isStopped = true;
+    }
+
+    private handleRestart() {
+        // 重置所有统计
+        this.resetTypingStats();
+        
+        // 初始化新会话
+        this.initialWordCount = null;
+        this.isStopped = false;
+        this.isPaused = false;
+        
+        // 恢复UI状态
+        this.statusBarItemEl.setText('Typing Stats: 统计重新开始...');
+        if (this.stopButtonEl) {
+            this.stopButtonEl.empty();
+            this.stopButtonEl.createEl('button', {
+                text: '⏹ 停止统计',
+                cls: 'typing-stop-button',
+            }).addEventListener('click', () => this.handleStop());
+        }
+
+        // 启动新计时
+        this.typingStartTime = Date.now();
+        this.lastTypedTime = Date.now();
+    }
+
+
+    // 插入统计信息到文档
+    private async insertStatsToDocument() {
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!activeView?.editor) return;
+ 
+        const statsContent = this.generateStatsContent();
+        const docEnd = activeView.editor.getCursor('to').line + 1;
+ 
+        activeView.editor.replaceRange(
+            `\n${statsContent}\n`,
+            { line: docEnd, ch: 0 }
+        );
+    }
+
+    // 生成统计内容
+    private generateStatsContent(): string {
+        return [
+            '## ✍️ 写作统计',
+            `- 总时长: ${this.formatTime(this.totalDuration)}`,
+            `- 有效写作: ${this.formatTime(this.effectiveTypingTime)}`,
+            `- 空闲时间: ${this.formatTime(this.totalIdleTime)}`,
+            `- 本次字数: ${this.currentSessionWordCount}`,
+            `- 平均速度: ${(this.currentSessionWordCount / (this.effectiveTypingTime / 3600)).toFixed(0)} 字/小时`,
+            `- 记录时间: ${new Date().toLocaleString()}`,
+            ''
+        ].join('\n');
+    }
+ 
 
 	private async activateView() {
         const { workspace } = this.app;
@@ -199,7 +296,10 @@ export default class TypingStatsPlugin extends Plugin {
         this.endTypingSession();
         // 手动清理视图
         this.app.workspace.detachLeavesOfType(VIEW_TYPE_STATS);
- 
+         // 清理按钮
+         if (this.stopButtonEl) {
+            this.stopButtonEl.remove();
+        }
         // 调用父类清理方法（自动清理通过 register* 方法注册的资源）
         super.onunload();
     }
